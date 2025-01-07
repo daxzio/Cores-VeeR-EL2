@@ -1,6 +1,8 @@
 # Copyright (c) 2023 Antmicro <www.antmicro.com>
 # SPDX-License-Identifier: Apache-2.0
 
+$(info $(shell cocotb-config --makefiles))
+
 TOPLEVEL_LANG    = verilog
 SIM             ?= verilator
 WAVES           ?= 1
@@ -35,19 +37,20 @@ else
     VERILATOR_COVERAGE = ""
 endif
 
-# Enable processing of #delay statements
 ifeq ($(SIM), verilator)
+    COMPILE_ARGS += --coverage-max-width 20000
     COMPILE_ARGS += --timing
     COMPILE_ARGS += -Wall -Wno-fatal
 
     EXTRA_ARGS   += --trace --trace-structs
     EXTRA_ARGS   += $(VERILATOR_COVERAGE)
+    EXTRA_ARGS   += -I$(CFGDIR) -Wno-DECLFILENAME
+else ifeq ($(SIM), vcs)
+    EXTRA_ARGS   += +incdir+$(CFGDIR) -assert svaext -cm line+cond+fsm+tgl+branch
 endif
 
 COCOTB_HDL_TIMEUNIT         = 1ns
 COCOTB_HDL_TIMEPRECISION    = 10ps
-
-EXTRA_ARGS += -I$(CFGDIR) -Wno-DECLFILENAME
 
 # Build directory
 ifneq ($(COVERAGE_TYPE),)
@@ -56,7 +59,13 @@ endif
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
+ifeq ($(PMP_TEST),)
+    EXTRA_CONFIG_OPTS = ""
+else
+    EXTRA_CONFIG_OPTS = "-set=pmp_entries=64"
+endif
+
 # Rules for generating VeeR config
 $(CFGDIR)/common_defines.vh:
-	cd $(CURDIR) && $(CONFIG)/veer.config -fpga_optimize=0
+	cd $(CURDIR) && $(CONFIG)/veer.config -fpga_optimize=0 $(EXTRA_CONFIG_OPTS)
 

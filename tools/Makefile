@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2020 Western Digital Corporation or its affiliates.
+# Copyright 2024 Antmicro <www.antmicro.com>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,6 +26,8 @@ CONF_PARAMS ?= -set build_axi4 $(USER_MODE_OPTS)
 TEST_CFLAGS = -g -gdwarf -O3 -funroll-all-loops
 ABI = -mabi=ilp32
 LD_ABI = $(ABI) -march=rv32imac
+
+TB_EXTRA_ARGS ?= --test-halt
 
 # Check for RV_ROOT
 ifeq (,$(wildcard ${RV_ROOT}/configs/veer.config))
@@ -68,6 +71,9 @@ ifeq ("$(.SHELLSTATUS)", "0")
         VERILATOR_NOIMPLICIT := -Wno-IMPLICIT
     endif
 endif
+
+VERILATOR_SKIP_WARNINGS = $(VERILATOR_NOIMPLICIT) -Wno-TIMESCALEMOD -Wno-ASCRANGE \
+	-Wno-CASEINCOMPLETE -Wno-INITIALDLY -Wno-WIDTH -Wno-UNOPTFLAT -Wno-SIDEEFFECT
 
 # Define test name
 TEST = hello_world
@@ -119,13 +125,41 @@ VPATH = $(TEST_DIR) $(BUILD_DIR) $(TBDIR)
 
 -include $(TEST_DIR)/$(TEST).mki
 
+# Testbench DPI sources
+TB_DPI_SRCS = jtagdpi/jtagdpi.c \
+              tcp_server/tcp_server.c
 
-TBFILES = $(TBDIR)/tb_top.sv $(TBDIR)/ahb_sif.sv
+TB_DPI_INCS := $(addprefix -I$(TBDIR)/,$(dir $(TB_DPI_SRCS)))
+# Add testbench include paths
+CFLAGS += $(TB_DPI_INCS)
+
+TB_DPI_SRCS := $(addprefix $(TBDIR)/,$(TB_DPI_SRCS))
+
+# Testbench sources
+TB_VERILATOR_SRCS = $(TBDIR)/test_tb_top.cpp $(TB_DPI_SRCS)
+
+TBFILES = $(TBDIR)/tb_top_pkg.sv \
+          $(TBDIR)/tb_top.sv \
+          $(TBDIR)/ahb_sif.sv \
+          $(TBDIR)/jtagdpi/jtagdpi.sv \
+          $(TBDIR)/ahb_lite_2to1_mux.sv \
+          $(TBDIR)/ahb_lsu_dma_bridge.sv \
+          $(TBDIR)/axi4_mux/axi_crossbar_wrap_2x1.v \
+          $(TBDIR)/axi4_mux/arbiter.v \
+          $(TBDIR)/axi4_mux/axi_crossbar_addr.v \
+          $(TBDIR)/axi4_mux/axi_crossbar_rd.v \
+          $(TBDIR)/axi4_mux/axi_crossbar.v \
+          $(TBDIR)/axi4_mux/axi_crossbar_wr.v \
+          $(TBDIR)/axi4_mux/axi_register_rd.v \
+          $(TBDIR)/axi4_mux/axi_register_wr.v \
+          $(TBDIR)/axi4_mux/priority_encoder.v
 
 defines  = $(BUILD_DIR)/common_defines.vh
 defines += ${RV_ROOT}/design/include/el2_def.sv
 defines += $(BUILD_DIR)/el2_pdef.vh
-includes = -I${BUILD_DIR}
+includes = -I${BUILD_DIR} -I$(TBDIR)/axi4_mux
+
+CM_HIER_FILE = $(RV_ROOT)/cm.cfg
 
 # Verilator supports only C++14 and newer
 CFLAGS += -std=c++14
@@ -139,7 +173,7 @@ VERILATOR_MAKE_FLAGS = OPT_FAST="-Os"
 all: clean verilator
 
 clean:
-	rm -rf *.log *.s *.hex *.dis *.tbl irun* vcs* simv* *.map snapshots veer* \
+	rm -rf *.log *.s *.hex *.dis *.tbl irun* vcs* simv* *.map snapshots \
 	verilator* *.exe obj* *.o *.sym ucli.key vc_hdrs.h csrc *.csv work \
 	dataset.asdb library.cfg vsimsa.cfg riviera-build wave.asdb
 
@@ -151,12 +185,11 @@ clean:
 ${BUILD_DIR}/defines.h:
 	BUILD_PATH=${BUILD_DIR} ${RV_ROOT}/configs/veer.config -target=$(target) $(CONF_PARAMS)
 
-verilator-build: ${TBFILES} ${BUILD_DIR}/defines.h test_tb_top.cpp
-	$(VERILATOR)  --cc -CFLAGS "${CFLAGS}" $(defines) \
+verilator-build: ${TBFILES} ${BUILD_DIR}/defines.h $(TB_VERILATOR_SRCS)
+	$(VERILATOR)  --cc -CFLAGS "${CFLAGS}" --coverage-max-width 20000 $(defines) \
 	  $(includes) -I${RV_ROOT}/testbench -f ${RV_ROOT}/testbench/flist \
-	  -Wno-WIDTH -Wno-UNOPTFLAT $(VERILATOR_NOIMPLICIT) \
-	  ${TBFILES} --top-module tb_top \
-	  -exe test_tb_top.cpp --autoflush $(VERILATOR_DEBUG) $(VERILATOR_COVERAGE)
+	  $(VERILATOR_SKIP_WARNINGS) ${TBFILES} --top-module tb_top \
+	  -exe $(TB_VERILATOR_SRCS) --autoflush --timing $(VERILATOR_DEBUG) $(VERILATOR_COVERAGE) -fno-table
 	cp ${RV_ROOT}/testbench/test_tb_top.cpp obj_dir/
 	$(MAKE) -e -C obj_dir/ -f Vtb_top.mk $(VERILATOR_MAKE_FLAGS)
 	touch verilator-build
@@ -165,8 +198,9 @@ vcs-build: ${TBFILES} ${BUILD_DIR}/defines.h
 	$(VCS) -full64 -assert svaext -sverilog +define+RV_OPENSOURCE $(ASSERT_DEFINES) \
 	  +error+500 +incdir+${RV_ROOT}/design/lib \
 	  +incdir+${RV_ROOT}/design/include ${BUILD_DIR}/common_defines.vh \
-	  +incdir+$(BUILD_DIR)  +libext+.v $(defines) \
-	  -f ${RV_ROOT}/testbench/flist ${TBFILES} -l vcs.log
+	  +incdir+$(BUILD_DIR)  +libext+.v $(defines) -CFLAGS "${CFLAGS}" \
+	  -cm_hier $(CM_HIER_FILE) \
+	  -f ${RV_ROOT}/testbench/flist ${TBFILES} ${TB_DPI_SRCS} -l vcs.log
 	touch vcs-build
 
 irun-build: ${TBFILES} ${BUILD_DIR}/defines.h
@@ -199,9 +233,9 @@ verilator: program.hex verilator-build
 	if [ $$? -eq 0 ]; then \
 		BEG=`grep "begin_signature" $(TEST).sym | cut -d\  -f 1`;\
 		END=`grep "end_signature"   $(TEST).sym | cut -d\  -f 1`;\
-		./obj_dir/Vtb_top --mem-signature $${BEG} $${END}; \
+		./obj_dir/Vtb_top ${TB_EXTRA_ARGS} --mem-signature $${BEG} $${END}; \
 	else \
-		./obj_dir/Vtb_top; \
+		./obj_dir/Vtb_top ${TB_EXTRA_ARGS}; \
 	fi
 
 irun: program.hex irun-build
@@ -227,7 +261,7 @@ picolibc:
 	$(MAKE) -f ${RV_ROOT}/tools/picolibc.mk all
 
 ifeq ($(shell which $(GCC_PREFIX)-gcc 2> /dev/null),)
-program.hex: picolibc ${BUILD_DIR}/defines.h
+program.hex: ${HEX_DIR}/$(TEST).hex
 	@echo " !!! No $(GCC_PREFIX)-gcc in path, using canned hex files !!"
 	cp ${HEX_DIR}/$(TEST).hex program.hex
 else

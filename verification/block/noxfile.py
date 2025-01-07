@@ -139,6 +139,7 @@ def verify_block(session, blockName, testName, coverage=""):
         "test_reset",
         "test_clken",
         "test_config",
+        "test_pending",
         "test_prioritization",
         "test_servicing",
     ],
@@ -161,6 +162,14 @@ def pic_gw_verify(session, blockName, testName, coverage):
 @nox.parametrize("testName", ["test_dec_tl"])
 @nox.parametrize("coverage", "toggle")
 def dec_tl_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["dec_ib"])
+@nox.parametrize("testName", ["test_dec_ib"])
+@nox.parametrize("coverage", "toggle")
+def dec_ib_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 
 
@@ -269,6 +278,7 @@ def dccm_verify(session, blockName, testName, coverage):
     [
         "test_axi",
         "test_axi_read_channel",
+        "test_axi_read_channel_multiple",
         "test_axi_write_channel",
     ],
 )
@@ -307,6 +317,32 @@ def pmp_verify(session, blockName, testName, coverage):
 
 
 @nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["pmp_random"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_pmp_random",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def pmp_random_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["dec_tlu_ctl"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_dec_tl",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def dec_tlu_ctl_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
 @nox.parametrize("blockName", ["dmi"])
 @nox.parametrize(
     "testName",
@@ -317,6 +353,22 @@ def pmp_verify(session, blockName, testName, coverage):
 )
 @nox.parametrize("coverage", coverageTypes)
 def dmi_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["lsu_tl"])
+@nox.parametrize("testName", ["test_lsu_tl"])
+@nox.parametrize("coverage", "toggle")
+def lsu_tl_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["dec_pmp_ctl"])
+@nox.parametrize("testName", ["test_dec_pmp_ctl"])
+@nox.parametrize("coverage", "toggle")
+def dec_pmp_ctl_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 
 

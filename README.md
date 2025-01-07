@@ -1,3 +1,14 @@
+<picture>
+  <!-- User prefers light mode: -->
+  <source srcset="docs/source/img/VeeR-logo-black-rgb.png" media="(prefers-color-scheme: light)"/>
+
+  <!-- User prefers dark mode: -->
+  <source srcset="/docs/source/img/VeeR-logo-white-rgb.png"  media="(prefers-color-scheme: dark)"/>
+
+  <!-- User has no color preference: -->
+  <img src="/docs/source/img/VeeR-logo-black-rgb.png"/>
+</picture>
+
 # VeeR EL2 RISC-V Core
 
 This repository contains the VeeR EL2 RISC-V Core design RTL.
@@ -30,7 +41,7 @@ Files under the [tools](tools/) directory may be available under a different lic
 ## Dependencies
 
 - Verilator **(4.106 or later)** must be installed on the system if running with Verilator
-- If adding/removing instructions, `espresso` must be installed (used by `tools/coredecode`)
+- If adding/removing instructions, [`espresso`](https://github.com/chipsalliance/espresso/tree/master) must be installed (used by `tools/coredecode`). Remember to checkout on `3.x` branch.
 - RISCV tool chain (based on gcc version 8.3 or higher) must be
 installed so that it can be used to prepare RISCV binaries to run.
 

@@ -38,7 +38,7 @@ class AXIReadTransactionRequestSeqItem(AXIReadBaseSeqItem):
         self.axi_arvalid = 1
 
     def randomize(self):
-        self.axi_araddr = 8 * random.randint(8, 32)
+        self.axi_araddr = 8 * random.randint(0, 0x1FFFFFFF)
 
 
 class AXIReadResponseReadSeqItem(AXIReadBaseSeqItem):
@@ -59,6 +59,19 @@ class AXIReadInactiveSeqItem(AXIReadBaseSeqItem):
 class AXIReadTransactionRequestSeq(BaseSeq):
     async def body(self):
         items = [
+            AXIReadTransactionRequestSeqItem("AXIReadTransactionRequestSeqItem"),
+            AXIReadInactiveSeqItem("AXIReadInactiveSeqItem"),
+        ]
+        await self.run_items(items)
+
+
+class AXIReadTransactionRequestMultipleSeq(BaseSeq):
+    async def body(self):
+        items = [
+            AXIReadTransactionRequestSeqItem("AXIReadTransactionRequestSeqItem"),
+            AXIReadTransactionRequestSeqItem("AXIReadTransactionRequestSeqItem"),
+            AXIReadTransactionRequestSeqItem("AXIReadTransactionRequestSeqItem"),
+            AXIReadTransactionRequestSeqItem("AXIReadTransactionRequestSeqItem"),
             AXIReadTransactionRequestSeqItem("AXIReadTransactionRequestSeqItem"),
             AXIReadInactiveSeqItem("AXIReadInactiveSeqItem"),
         ]

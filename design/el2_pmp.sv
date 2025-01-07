@@ -25,7 +25,9 @@ module el2_pmp
 ) (
     input logic clk,       // Top level clock
     input logic rst_l,     // Reset
+    /* pragma coverage off */
     input logic scan_mode, // Scan mode
+    /* pragma coverage on */
 
 `ifdef RV_SMEPMP
     input el2_mseccfg_pkt_t mseccfg, // mseccfg CSR content, RLB, MMWP and MML bits
@@ -93,7 +95,7 @@ module el2_pmp
                                           el2_pmp_type_pkt_t  pmp_req_type,
                                           logic               priv_mode,
                                           logic               permission_check);
-    logic result = 1'b0;
+    logic result;
     logic unused_cfg = |csr_pmp_cfg.mode;
 
     if (!csr_pmp_cfg.read && csr_pmp_cfg.write) begin
@@ -113,7 +115,9 @@ module el2_pmp
         2'b11: result =
              (pmp_req_type == EXEC) |
             ((pmp_req_type == READ) & ~priv_mode);
+        /* pragma coverage off */
         default: ;
+        /* pragma coverage on */
       endcase
     end else begin
       if (csr_pmp_cfg.read & csr_pmp_cfg.write & csr_pmp_cfg.execute & csr_pmp_cfg.lock) begin

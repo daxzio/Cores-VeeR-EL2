@@ -10,18 +10,30 @@ run_regression_test(){
     # BUS -
     # NAME -
     # COVERAGE -
-    check_args_count $# 4
+    # USER_MODE - '1' for user mode, '0' for without user mode
+    # CACHE WAYPACK -
+    check_args_count $# 6
     RESULTS_DIR=$1
     BUS=$2
     NAME=$3
     COVERAGE=$4
+    USER_MODE=$5
+    ICACHE_WAYPACK=$6
     echo -e "${COLOR_WHITE}========== running test '${NAME}' =========${COLOR_CLEAR}"
-    echo -e "${COLOR_WHITE} RESULTS_DIR = ${RESULTS_DIR}${COLOR_CLEAR}"
-    echo -e "${COLOR_WHITE} SYSTEM BUS  = ${BUS}${COLOR_CLEAR}"
-    echo -e "${COLOR_WHITE} NAME        = ${NAME}${COLOR_CLEAR}"
-    echo -e "${COLOR_WHITE} COVERAGE    = ${COVERAGE}${COLOR_CLEAR}"
+    echo -e "${COLOR_WHITE} RESULTS_DIR    = ${RESULTS_DIR}${COLOR_CLEAR}"
+    echo -e "${COLOR_WHITE} SYSTEM BUS     = ${BUS}${COLOR_CLEAR}"
+    echo -e "${COLOR_WHITE} NAME           = ${NAME}${COLOR_CLEAR}"
+    echo -e "${COLOR_WHITE} COVERAGE       = ${COVERAGE}${COLOR_CLEAR}"
+    echo -e "${COLOR_WHITE} USER_MODE      = ${USER_MODE}${COLOR_CLEAR}"
+    echo -e "${COLOR_WHITE} ICACHE_WAYPACK = ${ICACHE_WAYPACK}${COLOR_CLEAR}"
 
-    COMMON_PARAMS="-set=user_mode=1 -set=smepmp=1"
+    COMMON_PARAMS="-set bitmanip_zba -set bitmanip_zbb -set bitmanip_zbc -set bitmanip_zbe -set bitmanip_zbf -set bitmanip_zbp -set bitmanip_zbr -set bitmanip_zbs"
+
+    if [[ "${USER_MODE}" == "1" ]]; then
+        COMMON_PARAMS="-set=user_mode=1 -set=smepmp=1 ${COMMON_PARAMS}"
+    fi
+
+    COMMON_PARAMS="-set=icache_waypack=${ICACHE_WAYPACK} ${COMMON_PARAMS}"
 
     if [[ "${BUS}" == "axi" ]]; then
         PARAMS="-set build_axi4 ${COMMON_PARAMS}"
@@ -35,9 +47,9 @@ run_regression_test(){
     echo -e "${COLOR_WHITE} CONF PARAMS = ${PARAMS}${COLOR_CLEAR}"
 
     mkdir -p ${RESULTS_DIR}
-    LOG="${RESULTS_DIR}/test_${NAME}_${COVERAGE}.log"
+    LOG="${RESULTS_DIR}/test_${NAME}_${COVERAGE}_${USER_MODE}.log"
     touch ${LOG}
-    DIR="run_${NAME}_${COVERAGE}"
+    DIR="run_${NAME}_${COVERAGE}_${USER_MODE}"
 
     # Run the test
     mkdir -p ${DIR}
@@ -57,10 +69,8 @@ run_regression_test(){
 # BUS=axi
 # NAME=hello_world
 # COVERAGE=branch
-# run_regression_test.sh $RESULTS_DIR $BUS $NAME $COVERAGE
+# USER_MODE=1
+# run_regression_test.sh $RESULTS_DIR $BUS $NAME $COVERAGE $USER_MODE
 
-check_args_count $# 4
+check_args_count $# 6
 run_regression_test "$@"
-
-
-

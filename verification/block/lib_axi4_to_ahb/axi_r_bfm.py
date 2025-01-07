@@ -15,8 +15,8 @@ class AXIReadChannelBFM(metaclass=utility_classes.Singleton):
         self.dut = cocotb.top
         self.rst_n = cocotb.top.rst_l
         self.clk = cocotb.top.clk
-        self.req_driver_q = UVMQueue(maxsize=1)
-        self.rsp_driver_q = UVMQueue(maxsize=1)
+        self.req_driver_q = UVMQueue()
+        self.rsp_driver_q = UVMQueue()
         self.req_monitor_q = UVMQueue(maxsize=0)
         self.rsp_monitor_q = UVMQueue(maxsize=0)
         self.TIMEOUT_THRESHOLD = 20
@@ -49,6 +49,7 @@ class AXIReadChannelBFM(metaclass=utility_classes.Singleton):
         return result
 
     async def drive(self):
+        await RisingEdge(self.rst_n)
         while True:
             if self.rst_n.value == 0:
                 self.dut.axi_arvalid.value = 0
@@ -88,6 +89,7 @@ class AXIReadChannelBFM(metaclass=utility_classes.Singleton):
                         raise TimeoutError("Transaction Request Handshake Timeout: AXI Read")
 
     async def req_monitor_q_bfm(self):
+        await RisingEdge(self.rst_n)
         while True:
             if self.rst_n.value == 0:
                 await RisingEdge(self.rst_n)
@@ -105,6 +107,7 @@ class AXIReadChannelBFM(metaclass=utility_classes.Singleton):
                     await self.req_monitor_q.put(item)
 
     async def rsp_monitor_q_bfm(self):
+        await RisingEdge(self.rst_n)
         while True:
             if self.rst_n.value == 0:
                 await RisingEdge(self.rst_n)

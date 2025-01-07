@@ -41,6 +41,7 @@ class AHBLiteBFM(metaclass=utility_classes.Singleton):
         prev_htrans = AHB_LITE_TRANSFER_TYPE_ENCODING.IDLE
         htrans = AHB_LITE_TRANSFER_TYPE_ENCODING.IDLE
 
+        await RisingEdge(self.rst_n)
         while True:
             if self.rst_n.value == 0:
                 self.dut.ahb_hrdata.value = 0
@@ -63,6 +64,11 @@ class AHBLiteBFM(metaclass=utility_classes.Singleton):
                 else:
                     if htrans != prev_htrans:
                         self.rsp_driver_q.put_nowait(AHB_LITE_NOTIFICATION.AHB_LITE_READ)
+            elif get_int(self.dut.ahb_htrans) == AHB_LITE_TRANSFER_TYPE_ENCODING.SEQ:
+                htrans = AHB_LITE_TRANSFER_TYPE_ENCODING.SEQ
+                self.rsp_driver_q.put_nowait(AHB_LITE_NOTIFICATION.AHB_LITE_READ)
+
+                self.dut.ahb_hready.value = 1
 
             try:
                 (ahb_hrdata, ahb_hready, ahb_hresp) = self.req_driver_q.get_nowait()
@@ -71,8 +77,14 @@ class AHBLiteBFM(metaclass=utility_classes.Singleton):
                 self.dut.ahb_hresp.value = ahb_hresp
             except QueueEmpty:
                 self.dut.ahb_hrdata.value = 0
-                self.dut.ahb_hready.value = 0
-                self.dut.ahb_hresp.value = 0
+
+                # enforce error on sequential transfers to cover the `STREAM_RD_ERR` state
+                if get_int(self.dut.ahb_htrans) == AHB_LITE_TRANSFER_TYPE_ENCODING.SEQ:
+                    self.dut.ahb_hready.value = 1
+                    self.dut.ahb_hresp.value = 1
+                else:
+                    self.dut.ahb_hready.value = 0
+                    self.dut.ahb_hresp.value = 0
 
     async def req_monitor_q_bfm(self):
         while True:

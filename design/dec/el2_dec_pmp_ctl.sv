@@ -58,7 +58,10 @@ module el2_dec_pmp_ctl
    output el2_pmp_cfg_pkt_t pmp_pmpcfg  [pt.PMP_ENTRIES],
    output logic [31:0]      pmp_pmpaddr [pt.PMP_ENTRIES],
 
+   // Excluding scan_mode from coverage as its usage is determined by the integrator of the VeeR core.
+   /*pragma coverage off*/
    input  logic        scan_mode
+   /*pragma coverage on*/
    );
 
    logic wr_pmpcfg_r;
@@ -110,7 +113,7 @@ module el2_dec_pmp_ctl
 `ifdef RV_SMEPMP
       assign csr_wdata = raw_wdata & 8'b10011111;
 `else
-      assign csr_wdata = (raw_wdata & 8'b00000001) ? (raw_wdata & 8'b10011111) : (raw_wdata & 8'b10011101);
+      assign csr_wdata = raw_wdata[0] ? (raw_wdata & 8'b10011111) : (raw_wdata & 8'b10011101);
 `endif
 
       rvdffe #(8) pmpcfg_ff (.*, .clk(free_l2clk),
@@ -144,10 +147,10 @@ module el2_dec_pmp_ctl
    for (genvar entry_idx = 0; entry_idx < pt.PMP_ENTRIES; entry_idx++) begin : gen_pmpaddr_ff
       logic pmpaddr_lock;
       logic pmpaddr_lock_next;
-      assign pmpaddr_lock_next = ((entry_idx+1 < pt.PMP_ENTRIES)
-                                  ? (entry_lock_eff[entry_idx+1]
-                                     & pmp_pmpcfg[entry_idx+1].mode == TOR)
-                                  : 1'b0);
+      if (entry_idx+1 < pt.PMP_ENTRIES)
+         assign pmpaddr_lock_next = entry_lock_eff[entry_idx+1] & pmp_pmpcfg[entry_idx+1].mode == TOR;
+      else
+         assign pmpaddr_lock_next = 1'b0;
       assign pmpaddr_lock = entry_lock_eff[entry_idx] | pmpaddr_lock_next;
       assign pmp_pmpaddr[entry_idx][31:30] = 2'b00;
       rvdffe #(30) pmpaddr_ff (.*, .clk(free_l2clk),

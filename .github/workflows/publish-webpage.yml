@@ -18,6 +18,13 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v4
 
+      - name: Install coverage dependencies
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install -r .github/scripts/requirements-coverage.txt
+          echo "PATH=$PATH" >> $GITHUB_ENV
+
       - name: Print metadata
         run: |
           run_information="Repository: ${{ github.repository }} Commit SHA:${{ github.sha }} Workflow: ${{ github.workflow }} Run:${{ github.run_id }}"
@@ -56,18 +63,50 @@ jobs:
       - name: Preserve only valid items
         run: |
           mkdir -p ./public.old
-          cp -r ./public.checkout/doctrees ./public.old/ | true
-          cp -r ./public.checkout/html ./public.old/ | true
+          mv ./public.checkout/doctrees ./public.old/ | true
+          mv ./public.checkout/html ./public.old/ | true
 
       - name: Update webpage
         if: github.event_name != 'pull_request'
         run: |
-          .github/scripts/update_webpage.sh ${{ github.ref_name }} ${{ github.event_name }} 0
+          mv coverage_dashboard/*.zip .
+          sis -d webpage \
+            --include-documentation \
+            --doc-project-name "Cores VeeR EL2" \
+            --loc-github-ref-name ${{ github.ref_name }} \
+            --loc-github-event-name ${{ github.event_name }} \
+            --pr-number 0
+          # use docs from the artifact
+          rm -rf public.new/html/main/docs_rendered
+          mkdir -p public.new/html/main/docs_rendered
+          mv ./docs_rendered/* public.new/html/main/docs_rendered
+          mv data_*_verilator_info.zip public.new/html/main/
+          mv data.zip public.new/html/main/
+          mv data_v.zip public.new/html/main/
+          mv data_both.zip public.new/html/main/
+          echo ${GITHUB_RUN_ID} > public.new/html/main/run_id
+          tar -acf webpage.tar.gz public.new
 
       - name: Update webpage PR
         if: github.event_name == 'pull_request'
         run: |
-          .github/scripts/update_webpage.sh ${{ github.ref_name }} ${{ github.event_name }} ${{ github.event.number }}
+          mv coverage_dashboard/*.zip .
+          sis -d webpage \
+            --include-documentation \
+            --doc-project-name "Cores VeeR EL2" \
+            --loc-github-ref-name ${{ github.ref_name }} \
+            --loc-github-event-name ${{ github.event_name }} \
+            --pr-number ${{ github.event.number }}
+          # use docs from the artifact
+          rm -rf public.new/html/dev/${{ github.event.number }}/docs_rendered
+          mkdir -p public.new/html/dev/${{ github.event.number }}/docs_rendered
+          mv ./docs_rendered/* public.new/html/dev/${{ github.event.number }}/docs_rendered
+          mv data_*_verilator_info.zip public.new/html/dev/${{ github.event.number }}/
+          mv data.zip public.new/html/dev/${{ github.event.number }}/
+          mv data_v.zip public.new/html/dev/${{ github.event.number }}/
+          mv data_both.zip public.new/html/dev/${{ github.event.number }}/
+          echo ${GITHUB_RUN_ID} > public.new/html/dev/${{ github.event.number }}/run_id
+          tar -acf webpage.tar.gz public.new
 
       - name: Add redirect index page
         run: |
@@ -97,4 +136,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: webpage
-          path: ./public.new
+          path: ./webpage.tar.gz

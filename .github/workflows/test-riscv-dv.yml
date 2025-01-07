@@ -6,102 +6,6 @@ on:
 jobs:
 
 #--------------#
-#    Renode
-#--------------#
-  renode:
-    name: Download Renode
-    runs-on: ubuntu-latest
-    env:
-      CCACHE_DIR: "/opt/veer-el2/.cache/"
-      DEBIAN_FRONTEND: "noninteractive"
-
-    steps:
-      - name: Create Cache Timestamp
-        id: cache_timestamp
-        uses: nanzm/get-time-action@v2.0
-        with:
-          format: 'YYYY-MM-DD-HH-mm-ss'
-
-      - name: Setup cache
-        uses: actions/cache@v3
-        timeout-minutes: 60
-        continue-on-error: true
-        with:
-          path: "/opt/veer-el2/.cache/"
-          key: cache_renode_${{ steps.cache_timestamp.outputs.time }}
-          restore-keys: cache_renode_
-
-      - name: Get latest release
-        uses: robinraju/release-downloader@v1.8
-        with:
-          repository: "renode/renode"
-          latest: true
-          fileName: "renode-*.linux-portable.tar.gz"
-          extract: false
-
-      - name: Rename the archive
-        run: |
-          mv ${{ github.workspace }}/renode-*.tar.gz ${{ github.workspace }}/renode.tar.gz
-
-      - name: Store Renode binaries
-        uses: actions/upload-artifact@v3
-        with:
-          name: renode
-          path: ${{ github.workspace }}/renode.tar.gz
-          retention-days: 1
-
-#--------------#
-#    VeeR-ISS
-#--------------#
-  veer-iss:
-    name: Build VeeR-ISS
-    runs-on: ubuntu-latest
-    env:
-      CCACHE_DIR: "/opt/veer-el2/.cache/"
-      DEBIAN_FRONTEND: "noninteractive"
-
-    steps:
-      - name: Install prerequisities
-        run: |
-          sudo apt -qqy update && sudo apt -qqy --no-install-recommends install \
-            git build-essential ccache libboost-all-dev
-
-      - name: Create Cache Timestamp
-        id: cache_timestamp
-        uses: nanzm/get-time-action@v2.0
-        with:
-          format: 'YYYY-MM-DD-HH-mm-ss'
-
-      - name: Setup cache
-        uses: actions/cache@v3
-        timeout-minutes: 60
-        continue-on-error: true
-        with:
-          path: "/opt/veer-el2/.cache/"
-          key: cache_veer-iss_${{ steps.cache_timestamp.outputs.time }}
-          restore-keys: cache_veer-iss_
-
-      - name: Build VeeR-ISS
-        run: |
-          git clone https://github.com/chipsalliance/VeeR-ISS veer-iss
-          export CC="ccache gcc"
-          export CXX="ccache g++"
-          pushd veer-iss
-            git checkout 666c94e
-            make -j`nproc`
-            mkdir -p /opt/veer-iss
-            cp build-Linux/whisper /opt/veer-iss/
-          popd
-          cd /opt && tar -czvf veer-iss.tar.gz veer-iss/
-
-      - name: Store VeeR-ISS binaries
-        uses: actions/upload-artifact@v3
-        with:
-          name: veer-iss
-          path: /opt/*.tar.gz
-          retention-days: 1
-
-#--------------#
 #    Tests
 #--------------#
   generate-config:
@@ -145,28 +49,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Cache Code
-        uses: actions/cache@v3
-        id: cache-code
-        timeout-minutes: 60
-        with:
-          path: tools/riscv-dv/work/test_${{ matrix.test }}/asm_test
-          key: cache_${{ matrix.test }}_${{ matrix.version }}_${{ env.CACHE_HASH }}
-
       - name: Prepare Environment
-        if: steps.cache-code.outputs.cache-hit != 'true'
         run: _secret_prepare_env
 
       - name: Generate code
         id: riscv_dv_test
-        if: steps.cache-code.outputs.cache-hit != 'true' && matrix.version == 'uvm'
         run: _secret_generate_code
         env:
           RISCV_DV_TEST: ${{ matrix.test }}
-        continue-on-error: true
 
       - name: Generate code (pyflow)
-        if: steps.cache-code.outputs.cache-hit != 'true' && matrix.version == 'pyflow'
+        shell: bash
         run: |
           export RV_ROOT=`realpath .`
           pushd tools/riscv-dv
@@ -178,7 +71,6 @@ jobs:
           popd
 
       - name: Use fallback code
-        if: steps.cache-code.outputs.cache-hit != 'true' && steps.riscv_dv_test.outcome != 'success'
         run: |
           mkdir -p tools/riscv-dv/work/
           cp -r .github/assets/riscv_dv/${{ matrix.version  }}/* tools/riscv-dv/work/
@@ -193,158 +85,90 @@ jobs:
   run-tests:
     name: Run RISC-V DV tests
     runs-on: ubuntu-latest
-    needs: [ veer-iss, renode, generate-config, generate-code ]
+    container: ghcr.io/antmicro/cores-veer-el2:20250103160559
+    needs: [ generate-config, generate-code ]
     strategy:
       fail-fast: false
       matrix:
         test: ${{ fromJSON(needs.generate-config.outputs.test-types) }}
         iss:
           - spike
-          - whisper
-#         - renode
-        coverage: ["all", "branch", "toggle"] #TODO: add functional coverage
+          - renode
+        coverage: ["branch", "toggle"] #TODO: add functional coverage
         version: [ uvm ]
+        # TODO use separate privilege modes configurations for generating the VeeR model
+        priv: ["", "u"]
         include: ${{ fromJSON(needs.generate-config.outputs.test-include-run) }}
         exclude:
+            # Bitmanip tests are temporarily disabled in Renode
+            # until the extension implementation is complete
             - iss: renode
-              test: riscv_illegal_instr_test
+              test: riscv_bitmanip_full_test_veer
             - iss: renode
-              test: riscv_hint_instr_test
-            - iss: spike
-              test: riscv_illegal_instr_test
-            - iss: whisper
+              test: riscv_bitmanip_balanced_test_veer
+            # Disable illegal instr test, until illegal instruction handling is improved
+            # since there remain few edge cases to be resolved here
+            - iss: renode
               test: riscv_illegal_instr_test
 
-            # FIXME: VeeR specific WARL CSRs behavior in PMP is not implemented
-            # in whisper, hence this exclusion list for PMP tests
-            - iss: whisper
-              test: riscv_pmp_disable_all_regions_test_veer
-            - iss: whisper
-              test: riscv_pmp_out_of_bounds_test_veer
-            - iss: whisper
-              test: riscv_pmp_full_random_test_veer
-            - iss: whisper
-              test: riscv_pmp_region_exec_test_veer
+            - iss: renode
+              test: riscv_hint_instr_test
     env:
       DEBIAN_FRONTEND: "noninteractive"
       CCACHE_DIR: "/opt/riscv-dv/.cache/"
-      VERILATOR_VERSION: v5.010
-      SPIKE_VERSION: d70ea67d
       CACHE_HASH: ${{ needs.generate-config.outputs.hash }}
 
     steps:
       - name: Install utils
         run: |
           sudo apt -qqy update && sudo apt -qqy --no-install-recommends install \
-            git cpanminus ccache device-tree-compiler python3-minimal python3-pip \
-            libboost-all-dev gcc-riscv64-unknown-elf
-          sudo cpanm Bit::Vector
+            git ccache device-tree-compiler python3-minimal python3-pip \
+            libboost-all-dev
 
-      - name: Setup Cache Metadata
-        id: cache_metadata
+      # As of July 9th, 2024 `ubuntu:latest` comes with riscv64-unknown-elf-gcc
+      # 10.0.2. We need a newer version for bitmanip extension support.
+      - name: Install cross-compiler
+        shell: bash
         run: |
-          date=$(date +"%Y_%m_%d")
-          time=$(date +"%Y%m%d_%H%M%S_%N")
-          cache_verilator_restore_key=cache_verilator_
-          cache_verilator_key=${cache_verilator_restore_key}${{ env.VERILATOR_VERSION }}
-          cache_spike_restore_key=cache_spike_
-          cache_spike_key=${cache_spike_restore_key}${{ env.SPIKE_VERSION }}
-          cache_test_restore_key=${{ matrix.test }}_${{ matrix.coverage }}_
-          cache_test_key=${cache_test_restore_key}${time}
-          cache_code=cache_${{ matrix.test }}_${{ matrix.version }}
-
-          echo "date=$date" | tee -a "$GITHUB_ENV"
-          echo "time=$time" | tee -a "$GITHUB_ENV"
-          echo "cache_verilator_restore_key=$cache_verilator_restore_key" | tee -a "$GITHUB_ENV"
-          echo "cache_verilator_key=$cache_verilator_key" | tee -a "$GITHUB_ENV"
-          echo "cache_spike_restore_key=$cache_spike_restore_key" | tee -a "$GITHUB_ENV"
-          echo "cache_spike_key=$cache_spike_key" | tee -a "$GITHUB_ENV"
-          echo "cache_test_restore_key=$cache_test_restore_key" | tee -a "$GITHUB_ENV"
-          echo "cache_test_key=$cache_test_key" | tee -a "$GITHUB_ENV"
-          echo "cache_code=${cache_code}_${{ env.CACHE_HASH }}" | tee -a "$GITHUB_ENV"
-
-      - name: Restore verilator cache
-        id: cache-verilator-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: |
-            /opt/verilator
-            /opt/verilator/.cache
-          key: ${{ env.cache_verilator_key }}
-          restore-keys: ${{ env.cache_verilator_restore_key }}
-
-      - name: Restore Spike cache
-        id: cache-spike-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: |
-            /opt/spike
-            /opt/spike/.cache
-          key: ${{ env.cache_spike_key }}
-          restore-keys: ${{ env.cache_spike_restore_key }}
-
-      - name: Download Renode binaries
-        uses: actions/download-artifact@v3
-        with:
-          name: renode
-          path: /opt
-
-      - name: Download VeeR-ISS binaries
-        uses: actions/download-artifact@v3
-        with:
-          name: veer-iss
-          path: /opt
-
-      - name: Unpack binaries
-        run: |
-          pushd /opt
-            tar -zxvf veer-iss.tar.gz
-            tar -zxvf renode.tar.gz --strip-components=1
-          popd
+          echo "deb http://archive.ubuntu.com/ubuntu/ noble main universe" | sudo tee -a /etc/apt/sources.list > /dev/null
+          sudo apt -qqy update && sudo apt -qqy --no-install-recommends install \
+            gcc-riscv64-unknown-elf
+          riscv64-unknown-elf-gcc --version
 
       - name: Setup repository
         uses: actions/checkout@v3
         with:
           submodules: recursive
 
+      - name: Install coverage dependencies
+        shell: bash
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          pip install -r .github/scripts/requirements-coverage.txt
+          echo "PATH=$PATH" >> $GITHUB_ENV
+
       - name: Install Python deps
         run: |
           pip install -r third_party/riscv-dv/requirements.txt
 
-      - name: Create Cache Timestamp
-        id: cache_timestamp
-        uses: nanzm/get-time-action@v2.0
+      - name: Download Code Artifact
+        uses: actions/download-artifact@v3
         with:
-          format: 'YYYY-MM-DD-HH-mm-ss'
-
-      - name: Setup cache
-        uses: actions/cache@v3
-        timeout-minutes: 60
-        continue-on-error: true
-        with:
-          path: "/opt/veer-el2/.cache/"
-          key: cache_tests_${{ steps.cache_timestamp.outputs.time }}
-          restore-keys: cache_tests_
-
-      - name: Cache Code Restore
-        uses: actions/cache/restore@v3
-        id: cache-code-restore
-        timeout-minutes: 60
-        with:
-          path: tools/riscv-dv/work/test_${{ matrix.test }}/asm_test
-          key: ${{ env.cache_code }}
+          name: riscv-dv_generated_code_${{ matrix.version }}
+          path: tools/riscv-dv/work/
 
       - name: Run test
+        shell: bash
         run: |
+          ls tools/riscv-dv/work
           export PATH=/opt/verilator/bin:$PATH
-          export PATH=/opt/veer-iss:$PATH
           export RV_ROOT=`realpath .`
           export RISCV_GCC=riscv64-unknown-elf-gcc
           export RISCV_OBJCOPY=riscv64-unknown-elf-objcopy
           export RISCV_NM=riscv64-unknown-elf-nm
           export SPIKE_PATH=/opt/spike/bin
-          export WHISPER_ISS=/opt/veer-iss/whisper
-          export RENODE_PATH=/opt/renode
+          export RENODE_PATH=/opt/renode/renode
 
           echo "RV_ROOT=${RV_ROOT}" >> ${GITHUB_ENV}
           echo "PATH=${PATH}"       >> ${GITHUB_ENV}
@@ -352,22 +176,24 @@ jobs:
           ${RISCV_GCC} --version
 
           pushd tools/riscv-dv
+            # TODO use privilege mode from matrix,
+            # find a way to structure the files with `u` and `mu` properly
             make -j`nproc` \
               RISCV_DV_TEST=${{ matrix.test }} \
               RISCV_DV_ISS=${{ matrix.iss }} \
               RISCV_DV_ITER=3 \
               RISCV_DV_SEED=999 \
               COVERAGE=${{ matrix.coverage }} \
+              RISCV_DV_PRIV=${{ matrix.priv }} \
               run
           popd
 
       - name: Prepare coverage data
         run: |
-          .github/scripts/convert_coverage_data.sh ${RV_ROOT}/tools/riscv-dv/work/
-          echo "convert_coverage_data.sh exited with RET_CODE = "$?
+          sis -d convert --dat-dir ${RV_ROOT}/tools/riscv-dv/work/
           mkdir -p results
           mv ${RV_ROOT}/tools/riscv-dv/work/coverage.info \
-             results/coverage_riscv-dv_${{ matrix.test }}_${{ matrix.coverage }}.info
+             results/coverage_riscv-dv_${{matrix.priv}}_${{ matrix.test }}_${{ matrix.coverage }}.info
 
       - name: Pack artifacts
         if: always()
@@ -380,5 +206,46 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: artifacts-${{ matrix.test }}-${{ matrix.iss }}-${{ matrix.version }}
+          name: artifacts-${{matrix.priv}}_${{ matrix.test }}-${{ matrix.iss }}-${{ matrix.version }}
           path: tools/riscv-dv/work/test_*
+
+  run-custom-tests:
+    name: Run custom RISC-V DV tests
+    runs-on: [ self-hosted, Linux, X64, gcp-custom-runners ]
+    container: centos:8
+    needs: [ generate-config, generate-code ]
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJSON(needs.generate-config.outputs.test-types) }}
+        coverage: ["branch", "toggle"] #TODO: add functional coverage
+        version: [ uvm ]
+    env:
+      DEBIAN_FRONTEND: "noninteractive"
+      CCACHE_DIR: "/opt/riscv-dv/.cache/"
+      GHA_EXTERNAL_DISK: additional-tools
+      GHA_SA: gh-sa-veer-uploader
+      CACHE_HASH: ${{ needs.generate-config.outputs.hash }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Download Code Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: riscv-dv_generated_code_${{ matrix.version }}
+          path: tools/riscv-dv/work/
+
+      - name: Prepare Environment
+        run: _secret_prepare_env
+
+      - name: Install Python deps
+        run: |
+          pip3 install -r third_party/riscv-dv/requirements.txt
+
+      - name: Perform custom tests
+        run: _secret_custom_run
+        env:
+          RISCV_DV_TEST: ${{ matrix.test }}
