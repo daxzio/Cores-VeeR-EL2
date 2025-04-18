@@ -18,8 +18,7 @@ pipRequirementsPath = "requirements.txt"
 
 # Coverage types to collect
 coverageTypes = [
-    "branch",
-    "toggle",
+    "all",
 ]
 
 # Used lint tools
@@ -159,7 +158,7 @@ def pic_gw_verify(session, blockName, testName, coverage):
 @nox.session(tags=["tests"])
 @nox.parametrize("blockName", ["dec_tl"])
 @nox.parametrize("testName", ["test_dec_tl"])
-@nox.parametrize("coverage", "toggle")
+@nox.parametrize("coverage", coverageTypes)
 def dec_tl_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 
@@ -167,7 +166,7 @@ def dec_tl_verify(session, blockName, testName, coverage):
 @nox.session(tags=["tests"])
 @nox.parametrize("blockName", ["dec_ib"])
 @nox.parametrize("testName", ["test_dec_ib"])
-@nox.parametrize("coverage", "toggle")
+@nox.parametrize("coverage", coverageTypes)
 def dec_ib_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 
@@ -195,7 +194,7 @@ def dma_verify(session, blockName, testName, coverage):
 @nox.session(tags=["tests"])
 @nox.parametrize("blockName", ["ifu_compress"])
 @nox.parametrize("testName", ["test_compress"])
-@nox.parametrize("coverage", "toggle")  # No branches in the decompressor
+@nox.parametrize("coverage", coverageTypes)
 def ifu_compress_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 
@@ -393,7 +392,7 @@ def dmi_verify(session, blockName, testName, coverage):
 @nox.session(tags=["tests"])
 @nox.parametrize("blockName", ["lsu_tl"])
 @nox.parametrize("testName", ["test_lsu_tl"])
-@nox.parametrize("coverage", "toggle")
+@nox.parametrize("coverage", coverageTypes)
 def lsu_tl_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 
@@ -401,7 +400,7 @@ def lsu_tl_verify(session, blockName, testName, coverage):
 @nox.session(tags=["tests"])
 @nox.parametrize("blockName", ["dec_pmp_ctl"])
 @nox.parametrize("testName", ["test_dec_pmp_ctl"])
-@nox.parametrize("coverage", "toggle")
+@nox.parametrize("coverage", coverageTypes)
 def dec_pmp_ctl_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 

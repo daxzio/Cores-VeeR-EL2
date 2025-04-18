@@ -11,7 +11,7 @@ jobs:
   lint:
     name: Lint microarchitectural tests
     runs-on: ubuntu-24.04
-    container: ghcr.io/antmicro/cores-veer-el2:20250228170942
+    container: ghcr.io/antmicro/cores-veer-el2:20250411084921
     steps:
       - name: Setup repository
         uses: actions/checkout@v3
@@ -40,7 +40,7 @@ jobs:
   tests:
     name: Microarchitectural tests
     runs-on: ubuntu-24.04
-    container: ghcr.io/antmicro/cores-veer-el2:20250228170942
+    container: ghcr.io/antmicro/cores-veer-el2:20250411084921
     strategy:
       matrix:
         include:
@@ -149,11 +149,14 @@ jobs:
 
       - name: Prepare coverage data
         run: |
+          shopt -s extglob
           export PATH=/opt/verilator/bin:$PATH
           source .venv/bin/activate
-          sis -d convert --dat-dir ${TEST_PATH}/${TEST_NAME}/
+
           mkdir -p results
-          mv ${TEST_PATH}/${TEST_NAME}/*.info results/
+          for FILE in ${TEST_PATH}/${TEST_NAME}/*.dat; do
+            .github/scripts/convert_dat.sh "${FILE}" "results/$(basename "${FILE%_@(all|branch|toggle).dat}")"
+          done
 
           # Prefix coverage results
           pushd results

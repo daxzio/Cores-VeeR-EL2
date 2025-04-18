@@ -12,11 +12,11 @@ jobs:
   tests:
     name: Run RISCOF tests
     runs-on: ubuntu-24.04
-    container: ghcr.io/antmicro/cores-veer-el2:20250228170942
+    container: ghcr.io/antmicro/cores-veer-el2:20250411084921
     strategy:
       fail-fast: false
       matrix:
-        coverage: ["branch", "toggle"] #TODO: add functional coverage
+        coverage: ["all"]
         priv: ["", "u"]
     env:
       DEBIAN_FRONTEND: "noninteractive"
@@ -91,9 +91,8 @@ jobs:
       - name: Prepare coverage data
         run: |
           export PATH=/opt/verilator/bin:$PATH
-          sis -d convert --dat-dir riscof/coverage/
-          mv riscof/coverage/coverage.info \
-             riscof/coverage/coverage_riscof-m${{ matrix.priv }}_${{ matrix.coverage }}.info
+          .github/scripts/convert_dat.sh riscof/coverage/coverage.dat \
+             riscof/coverage/coverage_riscof-m${{ matrix.priv }}
 
       - name: Prepare report
         run: |
