@@ -289,7 +289,10 @@ import el2_pkg::*;
     logic [pt.ICACHE_NUM_WAYS-1:0][pt.ICACHE_BANKS_WAY-1:0]                                 any_bypass_up;
     logic [pt.ICACHE_NUM_WAYS-1:0][pt.ICACHE_BANKS_WAY-1:0]                                 any_addr_match_up;
 
-   for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: WAYS
+    assign ic_bank_way_clken_final = '0;
+    assign icache_export.ic_b_sb_bit_en_vec = '0;
+
+    for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: WAYS
       for (genvar k=0; k<pt.ICACHE_BANKS_WAY; k++) begin: BANKS_WAY   // 16B subbank
       if (pt.ICACHE_ECC) begin : ECC1
         logic                            [71-1:0]  wb_dout_pre_up;    // data and its bit enables
@@ -393,7 +396,7 @@ import el2_pkg::*;
                .*, .en(write_bypass_en_up[i][k][l]), .din(ic_b_rw_addr_up[i][k]), .dout(wb_index_hold_up[i][k][l])
             );
             rvdffe #(68) rd_data_hold_ff (
-               .*, .en(write_bypass_en_ff_up[i][k][l]), .din(wb_dout_pre_up[k]), .dout(wb_dout_hold_up[k][l])
+               .*, .en(write_bypass_en_ff_up[i][k][l]), .din(wb_dout_pre_up[k]), .dout(wb_dout_hold_up[l])
             );
           end
           always_comb begin
@@ -401,7 +404,7 @@ import el2_pkg::*;
             sel_bypass_data_up[i][k] = '0;
             for (int l=0; l<pt.ICACHE_NUM_BYPASS; l++) begin
               any_bypass_up[i][k]      |=  sel_bypass_ff_up[i][k][l];
-              sel_bypass_data_up[i][k] |= (sel_bypass_ff_up[i][k][l]) ? wb_dout_hold_up[k][l] : '0;
+              sel_bypass_data_up[i][k] |= (sel_bypass_ff_up[i][k][l]) ? wb_dout_hold_up[l] : '0;
             end
             wb_dout[i][k]   =   any_bypass_up[i][k] ?  sel_bypass_data_up[i][k] :  wb_dout_pre_up[k];
           end
@@ -894,11 +897,12 @@ end // block: OTHERS
     logic [pt.ICACHE_NUM_WAYS-1:0]        any_addr_match;
     logic [pt.ICACHE_NUM_WAYS-1:0]        ic_tag_clken_final;
 
-    for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: WAYS
     // Use exported ICache interface.
-      always_comb begin
-        icache_export.ic_tag_clken_final[i] = ic_tag_clken_final[i];
-      end
+    always_comb begin
+      icache_export.ic_tag_clken_final = ic_tag_clken_final;
+      icache_export.ic_tag_wren_biten_vec = '0;
+    end
+    for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: WAYS
 
       if (pt.ICACHE_ECC) begin  : ECC1
         logic [pt.ICACHE_TAG_NUM_BYPASS-1:0][25 :0] wb_dout_hold;
@@ -977,7 +981,6 @@ end // block: OTHERS
       end
       else  begin : ECC0
         logic [pt.ICACHE_TAG_NUM_BYPASS-1:0][21 :0] wb_dout_hold;
-        assign ic_tag_data_raw_pre[i][25:22] = '0 ;
 
         if (pt.ICACHE_TAG_BYPASS_ENABLE == 1) begin
           assign wrptr_in[i] = (wrptr[i] == (pt.ICACHE_TAG_NUM_BYPASS-1)) ? '0 : (wrptr[i] + 1'd1);
@@ -1075,8 +1078,7 @@ end // block: OTHERS
     logic [(26*pt.ICACHE_NUM_WAYS)-1:0]  sel_bypass_data;
     logic                                any_bypass;
     logic                                any_addr_match;
-    logic [pt.ICACHE_NUM_WAYS-1:0]       ic_tag_clken_final;
-
+    logic                                ic_tag_clken_final;
 
    if (pt.ICACHE_ECC) begin  : ECC1
     logic [(26*pt.ICACHE_NUM_WAYS)-1 :0]  ic_tag_data_raw_packed, ic_tag_wren_biten_vec, ic_tag_data_raw_packed_pre;           // data and its bit enables
@@ -1092,7 +1094,7 @@ end // block: OTHERS
       assign ic_tag_wren_biten_vec[(26*i)+25:26*i] = {26{ic_tag_wren_q[i]}};
       // Use exported ICache interface.
       always_comb begin
-        icache_export.ic_tag_clken_final[i] = ic_tag_clken_final[i];
+        icache_export.ic_tag_clken_final[i] = ic_tag_clken_final;
       end
     end
 
@@ -1166,9 +1168,7 @@ end // block: OTHERS
         assign ic_b_sram_en              = |ic_tag_clken;
         assign ic_b_read_en              =  ic_b_sram_en &   (|ic_tag_rden_q);
         assign ic_b_write_en             =  ic_b_sram_en &   (|ic_tag_wren_q);
-        for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: CLK_FINAL_BYPASS_ENABLE
-          assign ic_tag_clken_final[i]        =  ic_b_sram_en &    ~(|sel_bypass);
-        end
+        assign ic_tag_clken_final        =  ic_b_sram_en &    ~(|sel_bypass);
 
         // LSB is pt.ICACHE_TAG_INDEX_LO]
         assign ic_b_rw_addr = {ic_rw_addr_q};
@@ -1213,9 +1213,7 @@ end // block: OTHERS
       end // if (pt.ICACHE_BYPASS_ENABLE == 1)
       else begin
           assign ic_tag_data_raw_packed   =   ic_tag_data_raw_packed_pre;
-          for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: CLK_FINAL_BYPASS_DISABLE
-            assign ic_tag_clken_final[i]     =   |ic_tag_clken;
-          end;
+          assign ic_tag_clken_final       =   |ic_tag_clken;
       end
 
     end // block: WAYS
@@ -1243,8 +1241,19 @@ end // block: OTHERS
    else  begin : ECC0
     logic [(22*pt.ICACHE_NUM_WAYS)-1 :0]  ic_tag_data_raw_packed, ic_tag_wren_biten_vec, ic_tag_data_raw_packed_pre;           // data and its bit enables
     logic [pt.ICACHE_TAG_NUM_BYPASS-1:0][(22*pt.ICACHE_NUM_WAYS)-1 :0] wb_packeddout_hold;
+
+    // Use exported ICache interface.
+    always_comb begin
+      icache_export.ic_tag_wren_biten_vec = ic_tag_wren_biten_vec;
+      ic_tag_data_raw_packed_pre = icache_export.ic_tag_data_raw_packed_pre;
+    end
+
     for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: BITEN
         assign ic_tag_wren_biten_vec[(22*i)+21:22*i] = {22{ic_tag_wren_q[i]}};
+        // Use exported ICache interface.
+        always_comb begin
+          icache_export.ic_tag_clken_final[i] = ic_tag_clken_final;
+        end
      end
       if (pt.ICACHE_NUM_WAYS == 4) begin : WAYS
         if (pt.ICACHE_TAG_BYPASS_ENABLE == 1) begin
@@ -1256,9 +1265,7 @@ end // block: OTHERS
           assign ic_b_sram_en              = |ic_tag_clken;
           assign ic_b_read_en              =  ic_b_sram_en &   (|ic_tag_rden_q);
           assign ic_b_write_en             =  ic_b_sram_en &   (|ic_tag_wren_q);
-          for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: CLK_FINAL_BYPASS_ENABLE_WAYS
-            assign ic_tag_clken_final[i]       =  ic_b_sram_en &    ~(|sel_bypass);
-          end
+          assign ic_tag_clken_final        =  ic_b_sram_en &    ~(|sel_bypass);
 
           // LSB is pt.ICACHE_TAG_INDEX_LO]
           assign ic_b_rw_addr = {ic_rw_addr_q};
@@ -1303,9 +1310,7 @@ end // block: OTHERS
         end // if (pt.ICACHE_BYPASS_ENABLE == 1)
         else begin
             assign ic_tag_data_raw_packed   =   ic_tag_data_raw_packed_pre; 
-            for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: CLK_FINAL_BYPASS_ENABLE_NOWAYS
-              assign ic_tag_clken_final[i]       =   |ic_tag_clken;
-            end
+            assign ic_tag_clken_final       =   |ic_tag_clken;
         end
 
       end // block: WAYS
@@ -1319,9 +1324,7 @@ end // block: OTHERS
           assign ic_b_sram_en              = |ic_tag_clken;
           assign ic_b_read_en              =  ic_b_sram_en &   (|ic_tag_rden_q);
           assign ic_b_write_en             =  ic_b_sram_en &   (|ic_tag_wren_q);
-          for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: CLK_FINAL_BYPASS_ENABLE_TAG_BYPASS
-            assign ic_tag_clken_final[i]      =  ic_b_sram_en &    ~(|sel_bypass);
-          end
+          assign ic_tag_clken_final        =  ic_b_sram_en &    ~(|sel_bypass);
 
           // LSB is pt.ICACHE_TAG_INDEX_LO]
           assign ic_b_rw_addr = {ic_rw_addr_q};
@@ -1366,9 +1369,7 @@ end // block: OTHERS
         end // if (pt.ICACHE_BYPASS_ENABLE == 1)
         else begin
             assign ic_tag_data_raw_packed   =   ic_tag_data_raw_packed_pre;
-            for (genvar i=0; i<pt.ICACHE_NUM_WAYS; i++) begin: CLK_FINAL_BYPASS_ENABLE_NO_TAG_BYPASS
-              assign ic_tag_clken_final[i]    =   |ic_tag_clken;
-            end
+            assign ic_tag_clken_final       =   |ic_tag_clken;
         end
       end // block: WAYS
 
