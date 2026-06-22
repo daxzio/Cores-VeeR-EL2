@@ -16,12 +16,12 @@ jobs:
       matrix:
         bus: ["axi", "ahb"]
         # run some subset of regression tests on DCLS configutation
-        test: ["hello_world", "hello_world_dccm", "dcls", "dhry", "ecc",
-               "csr_misa", "csr_access", "csr_mstatus", "csr_mseccfg", "perf_counters",
+        test: ["hello_world", "hello_world_dccm", "dcls", "dcls_debug", "dcls_error_ctrl", "dhry",
+               "ecc", "csr_misa", "csr_access", "csr_mstatus", "csr_mseccfg", "perf_counters",
                "icache", "bitmanip"]
         coverage: ["all"]
         priv: ["0", "1"]
-        tb_extra_args: ["--test-halt"]
+        tb_extra_args: [""]
         exclude:
           # These tests require user mode
           - priv: "0"
@@ -43,7 +43,7 @@ jobs:
             bus: "axi"
             coverage: "branch"
             priv: "0"
-            tb_extra_args: "--test-halt --test-lsu-clk-ratio"
+            tb_extra_args: "--test-lsu-clk-ratio"
     env:
       DEBIAN_FRONTEND: "noninteractive"
       CCACHE_DIR: "/opt/regression/.cache/"
@@ -96,8 +96,8 @@ jobs:
       matrix:
         bus: ["axi", "ahb"]
         # run some subset of regression tests on DCLS configutation
-        test: ["hello_world", "hello_world_dccm", "dcls", "dcls_error_ctrl", "dhry", "ecc",
-               "csr_misa", "csr_access", "csr_mstatus", "csr_mseccfg", "perf_counters",
+        test: ["hello_world", "hello_world_dccm", "dcls", "dcls_debug", "dcls_error_ctrl", "dhry",
+               "ecc", "csr_misa", "csr_access", "csr_mstatus", "csr_mseccfg", "perf_counters",
                "icache", "bitmanip"]
         priv: ["0", "1"]
         exclude:
