@@ -81,7 +81,6 @@ module el2_veer_lockstep
     input logic                    iccm_buf_correct_ecc,
     input logic                    iccm_correction_state,
 
-    input logic [63:0] iccm_rd_data,
     input logic [77:0] iccm_rd_data_ecc,
 
     // ICache , ITAG  ports
@@ -97,9 +96,6 @@ module el2_veer_lockstep
     input  logic [70:0]               ic_debug_rd_data ,        // Data read from Icache. 2x64bits + parity bits. F2 stage. With ECC
     input logic [25:0] ictag_debug_rd_data,  // Debug icache tag.
     input logic [70:0] ic_debug_wr_data,  // Debug wr cache.
-
-    input logic [63:0] ic_premux_data,  // Premux data to be muxed with each way of the Icache.
-    input logic ic_sel_premux_data,  // Select premux data
 
 
     input logic [  pt.ICACHE_INDEX_HI:3] ic_debug_addr,       // Read/Write address to the Icache.
@@ -487,7 +483,6 @@ module el2_veer_lockstep
   assign main_core_inputs.mpc_reset_run_req = mpc_reset_run_req;
   assign main_core_inputs.dccm_rd_data_lo = dccm_rd_data_lo;
   assign main_core_inputs.dccm_rd_data_hi = dccm_rd_data_hi;
-  assign main_core_inputs.iccm_rd_data = iccm_rd_data;
   assign main_core_inputs.iccm_rd_data_ecc = iccm_rd_data_ecc;
   assign main_core_inputs.ic_rd_data = ic_rd_data;
   assign main_core_inputs.ic_rd_addr_lo = ic_rd_addr_lo;
@@ -625,8 +620,6 @@ module el2_veer_lockstep
   assign main_core_outputs.ic_rd_en = ic_rd_en;
   assign main_core_outputs.ic_wr_data = ic_wr_data;
   assign main_core_outputs.ic_debug_wr_data = ic_debug_wr_data;
-  assign main_core_outputs.ic_premux_data = ic_premux_data;
-  assign main_core_outputs.ic_sel_premux_data = ic_sel_premux_data;
   assign main_core_outputs.ic_debug_addr = ic_debug_addr;
   assign main_core_outputs.ic_debug_rd_en = ic_debug_rd_en;
   assign main_core_outputs.ic_debug_wr_en = ic_debug_wr_en;
@@ -884,7 +877,6 @@ module el2_veer_lockstep
       .iccm_wr_data(shadow_core_outputs.iccm_wr_data),
       .iccm_buf_correct_ecc(shadow_core_outputs.iccm_buf_correct_ecc),
       .iccm_correction_state(shadow_core_outputs.iccm_correction_state),
-      .iccm_rd_data(shadow_core_inputs.iccm_rd_data),
       .iccm_rd_data_ecc(shadow_core_inputs.iccm_rd_data_ecc),
 
       .ic_rw_addr(shadow_core_outputs.ic_rw_addr),
@@ -899,9 +891,6 @@ module el2_veer_lockstep
       .ic_debug_rd_data(shadow_core_inputs.ic_debug_rd_data),
       .ictag_debug_rd_data(shadow_core_inputs.ictag_debug_rd_data),
       .ic_debug_wr_data(shadow_core_outputs.ic_debug_wr_data),
-
-      .ic_premux_data(shadow_core_outputs.ic_premux_data),
-      .ic_sel_premux_data(shadow_core_outputs.ic_sel_premux_data),
 
       .ic_debug_addr(shadow_core_outputs.ic_debug_addr),
       .ic_debug_rd_en(shadow_core_outputs.ic_debug_rd_en),

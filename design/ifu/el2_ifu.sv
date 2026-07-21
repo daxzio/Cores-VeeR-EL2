@@ -132,9 +132,6 @@ import el2_pkg::*;
 
    output logic [70:0]               ifu_ic_debug_rd_data,
 
-   output logic [63:0]               ic_premux_data,     // Premux data to be muxed with each way of the Icache.
-   output logic                      ic_sel_premux_data, // Select the premux data.
-
    output logic [pt.ICACHE_INDEX_HI:3]               ic_debug_addr,      // Read/Write address to the Icache.
    output logic                      ic_debug_rd_en,     // Icache debug rd
    output logic                      ic_debug_wr_en,     // Icache debug wr
@@ -155,7 +152,6 @@ import el2_pkg::*;
    output logic [77:0]               iccm_wr_data,       // ICCM write data.
    output logic [2:0]                iccm_wr_size,       // ICCM write location within DW.
 
-   input  logic [63:0]               iccm_rd_data,       // Data read from ICCM.
    input  logic [77:0]               iccm_rd_data_ecc,   // Data + ECC read from ICCM.
 
    // ICCM ECC status
