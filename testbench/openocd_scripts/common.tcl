@@ -16,7 +16,7 @@
 proc compare {x y} {
     puts "'$x' vs. '$y'"
 
-    if {[llength $y] != [llength $y]} {
+    if {[llength $x] != [llength $y]} {
         puts "length mismatch!"
         return -1
     }
@@ -33,4 +33,14 @@ proc compare {x y} {
 
 set STDOUT 0x300300cc
 set dmstatus_addr 0x11
+
+proc finish { code } {
+    # Send signal to call $finish, then exit with the test result
+    riscv set_mem_access sysbus
+    write_memory 0xd0580000 8 $code phys
+    if {$code != 0xFF} {
+        shutdown error
+    }
+    shutdown
+}
 
