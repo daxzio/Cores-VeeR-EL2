@@ -197,7 +197,6 @@ module tb_top
 
     wire                        lmem_hready_out;
     wire                        dma_hready_out;
-    int                         commit_count;
 
     logic [3:0]                 nmi_assert_int;
 
@@ -745,7 +744,6 @@ module tb_top
 `endif
 
 `endif
-    string                      abi_reg[32]; // ABI register names
     el2_mem_if el2_mem_export ();
 
     logic [pt.ICCM_NUM_BANKS-1:0][                   38:0] iccm_bank_wr_fdata;
@@ -785,7 +783,7 @@ module tb_top
 
     assign mailbox_data_val = mailbox_data[7:0] > 8'h5 && mailbox_data[7:0] < 8'h7f;
 
-    integer fd, tp, el;
+    integer fd;
     logic next_dbus_error;
     logic next_ibus_error;
     logic next_ic_error;
@@ -3173,78 +3171,43 @@ module tb_top
     // at least two clock cycles - see RISC-V VeeR EL2 Programmer's Reference Manual section 2.16
     assign nmi_int = |{nmi_assert_int[3:2]};
 
-    // trace monitor
-    always @(posedge core_clk) begin
-    `ifndef GATELEVEL_DUT
-        wb_valid      <= `DEC.dec_i0_wen_r;
-        wb_dest       <= `DEC.dec_i0_waddr_r;
-        wb_data       <= `DEC.dec_i0_wdata_r;
-        wb_csr_valid  <= `DEC.dec_csr_wen_r;
-        wb_csr_dest   <= `DEC.dec_csr_wraddr_r;
-        wb_csr_data   <= `DEC.dec_csr_wrdata_r;
-    `endif
-        if (trace_rv_i_valid_ip) begin
-           $fwrite(tp,"%b,%h,%h,%0h,%0h,3,%b,%h,%h,%b\n", trace_rv_i_valid_ip, 0, trace_rv_i_address_ip,
-                  0, trace_rv_i_insn_ip,trace_rv_i_exception_ip,trace_rv_i_ecause_ip,
-                  trace_rv_i_tval_ip,trace_rv_i_interrupt_ip);
-           // Basic trace - no exception register updates
-           // #1 0 ee000000 b0201073 c 0b02       00000000
-           commit_count++;
-        `ifndef GATELEVEL_DUT
-           $fwrite (el, "%10d : %8s 0 %h %h%13s %14s ; %s\n", cycleCnt, $sformatf("#%0d",commit_count),
-                        trace_rv_i_address_ip, trace_rv_i_insn_ip,
-                        (wb_dest !=0 && wb_valid)?  $sformatf("%s=%h", abi_reg[wb_dest], wb_data) : "            ",
-                        (wb_csr_valid)? $sformatf("c%h=%h", wb_csr_dest, wb_csr_data) : "             ",
-                        dasm(trace_rv_i_insn_ip, trace_rv_i_address_ip, wb_dest & {5{wb_valid}}, wb_data)
-                   );
-        `endif
-        end
-    `ifndef GATELEVEL_DUT
-        if(`DEC.dec_nonblock_load_wen) begin
-            $fwrite (el, "%10d : %32s=%h                ; nbL\n", cycleCnt, abi_reg[`DEC.dec_nonblock_load_waddr], `DEC.lsu_nonblock_load_data);
-            tb_top.gpr[0][`DEC.dec_nonblock_load_waddr] = `DEC.lsu_nonblock_load_data;
-        end
-        if(`DEC.exu_div_wren) begin
-            $fwrite (el, "%10d : %32s=%h                ; nbD\n", cycleCnt, abi_reg[`DEC.div_waddr_wb], `DEC.exu_div_result);
-            tb_top.gpr[0][`DEC.div_waddr_wb] = `DEC.exu_div_result;
-        end
-    `endif
-    end
+    // Trace interface(s)
+    trace_monitor_if  trace();
+
+    // Connect trace signals
+    assign trace.clk    = core_clk;
+    assign trace.rst_n  = rst_l;
+
+    assign trace.trace_insn      = trace_rv_i_insn_ip;
+    assign trace.trace_address   = trace_rv_i_address_ip;
+    assign trace.trace_valid     = trace_rv_i_valid_ip;
+    assign trace.trace_exception = trace_rv_i_exception_ip;
+    assign trace.trace_ecause    = trace_rv_i_ecause_ip;
+    assign trace.trace_interrupt = trace_rv_i_interrupt_ip;
+    assign trace.trace_tval      = trace_rv_i_tval_ip;
+
+
+`ifndef GATELEVEL_DUT
+    assign trace.gpr_wvalid = `DEC.dec_i0_wen_r;
+    assign trace.gpr_waddr  = `DEC.dec_i0_waddr_r;
+    assign trace.gpr_wdata  = `DEC.dec_i0_wdata_r;
+
+    assign trace.csr_wvalid = `DEC.dec_csr_wen_r;
+    assign trace.csr_waddr  = `DEC.dec_csr_wraddr_r;
+    assign trace.csr_wdata  = `DEC.dec_csr_wrdata_r;
+
+    assign trace.nonblock_load_wvalid = `DEC.dec_nonblock_load_wen;
+    assign trace.nonblock_load_waddr  = `DEC.dec_nonblock_load_waddr;
+    assign trace.nonblock_load_wdata  = `DEC.lsu_nonblock_load_data;
+
+    assign trace.div_wvalid = `DEC.exu_div_wren;
+    assign trace.div_waddr  = `DEC.div_waddr_wb;
+    assign trace.div_wdata  = `DEC.exu_div_result;
+`endif
+
+    TraceMonitor trace_monitor;
 
     initial begin
-        abi_reg[0] = "zero";
-        abi_reg[1] = "ra";
-        abi_reg[2] = "sp";
-        abi_reg[3] = "gp";
-        abi_reg[4] = "tp";
-        abi_reg[5] = "t0";
-        abi_reg[6] = "t1";
-        abi_reg[7] = "t2";
-        abi_reg[8] = "s0";
-        abi_reg[9] = "s1";
-        abi_reg[10] = "a0";
-        abi_reg[11] = "a1";
-        abi_reg[12] = "a2";
-        abi_reg[13] = "a3";
-        abi_reg[14] = "a4";
-        abi_reg[15] = "a5";
-        abi_reg[16] = "a6";
-        abi_reg[17] = "a7";
-        abi_reg[18] = "s2";
-        abi_reg[19] = "s3";
-        abi_reg[20] = "s4";
-        abi_reg[21] = "s5";
-        abi_reg[22] = "s6";
-        abi_reg[23] = "s7";
-        abi_reg[24] = "s8";
-        abi_reg[25] = "s9";
-        abi_reg[26] = "s10";
-        abi_reg[27] = "s11";
-        abi_reg[28] = "t3";
-        abi_reg[29] = "t4";
-        abi_reg[30] = "t5";
-        abi_reg[31] = "t6";
-
         extintsrc_req = {pt.PIC_TOTAL_INT-1{1'b0}};
         timer_int     = 0;
         soft_int      = 0;
@@ -3259,15 +3222,15 @@ module tb_top
 
         $readmemh("program.hex",  lmem.mem);
         $readmemh("program.hex",  imem.mem);
-    `ifndef GATELEVEL_DUT
-        tp = $fopen("trace_port.csv","w");
-        el = $fopen("exec.log","w");
-        $fwrite (el, "//   Cycle : #inst    0    pc    opcode    reg=value    csr=value     ; mnemonic\n");
+`ifndef GATELEVEL_DUT
         fd = $fopen("console.log","w");
-    `endif
-        commit_count = 0;
+`endif
         preload_dccm();
         preload_iccm();
+
+`ifndef GATELEVEL_DUT
+        trace_monitor = new(trace, "exec.log", "trace_port.csv");
+`endif
 
 `ifndef VERILATOR
    `ifdef VCS_DEBUG
@@ -4018,249 +3981,7 @@ axi_lsu_dma_bridge # (RV_MUX_BUS_TAG, RV_MUX_BUS_TAG) bridge(
 
 `endif
 
-task preload_iccm;
-bit[31:0] data;
-bit[31:0] addr, eaddr, saddr;
-
-/*
-addresses:
- 0xfffffff0 - ICCM start address to load
- 0xfffffff4 - ICCM end address to load
-*/
-`ifndef VERILATOR
-init_iccm();
-`endif
-addr = 'hffff_fff0;
-saddr = {lmem.mem[addr+3],lmem.mem[addr+2],lmem.mem[addr+1],lmem.mem[addr]};
-if ( (saddr < `RV_ICCM_SADR) || (saddr > `RV_ICCM_EADR)) return;
-`ifndef RV_ICCM_ENABLE
-    $display("[%0t ns] ********************************************************",$time);
-    $display("[%0t ns] ICCM preload: there is no ICCM in VeeR, terminating !!!",$time);
-    $display("[%0t ns] ********************************************************",$time);
-    $finish;
-`endif
-addr += 4;
-eaddr = {lmem.mem[addr+3],lmem.mem[addr+2],lmem.mem[addr+1],lmem.mem[addr]};
-$display("[%0t ns] ICCM pre-load from %h to %h",$time, saddr, eaddr);
-
-for(addr= saddr; addr <= eaddr; addr+=4) begin
-    data = {imem.mem[addr+3],imem.mem[addr+2],imem.mem[addr+1],imem.mem[addr]};
-`ifdef RV_ICCM_ADDR_XOR
-    slam_iccm_ram(addr, {riscv_ecc32(data), data ^ {addr[`RV_ICCM_BITS-1:2], addr[`RV_ICCM_BITS-1:2]}});
-`else
-    slam_iccm_ram(addr, data == 0 ? 0 : {riscv_ecc32(data),data});
-`endif
-end
-
-endtask
-
-
-task preload_dccm;
-bit[31:0] data;
-bit[31:0] addr, saddr, eaddr;
-
-/*
-addresses:
- 0xffff_fff8 - DCCM start address to load
- 0xffff_fffc - DCCM end address to load
-*/
-
-`ifdef RV_DCCM_WR_READBACK
-`ifndef VERILATOR
-init_dccm();
-`endif
-`endif
-addr = 'hffff_fff8;
-saddr = {lmem.mem[addr+3],lmem.mem[addr+2],lmem.mem[addr+1],lmem.mem[addr]};
-if (saddr < `RV_DCCM_SADR || saddr > `RV_DCCM_EADR) return;
-`ifndef RV_DCCM_ENABLE
-    $display("[%0t ns] ********************************************************",$time);
-    $display("[%0t ns] DCCM preload: there is no DCCM in VeeR, terminating !!!",$time);
-    $display("[%0t ns] ********************************************************",$time);
-    $finish;
-`endif
-addr += 4;
-eaddr = {lmem.mem[addr+3],lmem.mem[addr+2],lmem.mem[addr+1],lmem.mem[addr]};
-$display("[%0t ns] DCCM pre-load from %h to %h",$time, saddr, eaddr);
-
-for(addr=saddr; addr <= eaddr; addr+=4) begin
-    data = {lmem.mem[addr+3],lmem.mem[addr+2],lmem.mem[addr+1],lmem.mem[addr]};
-`ifdef RV_DCCM_ADDR_XOR
-    // DCCM address infection (see el2_lsu_dccm_ctl.sv): the core stores
-    // (data ^ mask(word_addr)) and undoes it on read, so this backdoor loader
-    // must apply the same XOR. The ECC is computed over the true data.
-    slam_dccm_ram(addr, {riscv_ecc32(data), data ^ {{(pt.DCCM_DATA_WIDTH-2*(pt.DCCM_BITS-2)){1'b0}}, addr[pt.DCCM_BITS-1:2], addr[pt.DCCM_BITS-1:2]}});
-`else
-    slam_dccm_ram(addr, data == 0 ? 0 : {riscv_ecc32(data),data});
-`endif
-end
-
-endtask
-
-
-
-`define DRAM(bk) Gen_dccm_enable.dccm_loop[bk].dccm.dccm_bank.ram_core
-`define IRAM(bk) Gen_iccm_enable.iccm_loop[bk].iccm.iccm_bank.ram_core
-
-
-task slam_dccm_ram(input [31:0] addr, input[38:0] data);
-int bank, indx;
-bank = get_dccm_bank(addr, indx);
-`ifdef RV_DCCM_ENABLE
-case(bank)
-0: `DRAM(0)[indx] = data;
-1: `DRAM(1)[indx] = data;
-`ifdef RV_DCCM_NUM_BANKS_4
-2: `DRAM(2)[indx] = data;
-3: `DRAM(3)[indx] = data;
-`endif
-`ifdef RV_DCCM_NUM_BANKS_8
-2: `DRAM(2)[indx] = data;
-3: `DRAM(3)[indx] = data;
-4: `DRAM(4)[indx] = data;
-5: `DRAM(5)[indx] = data;
-6: `DRAM(6)[indx] = data;
-7: `DRAM(7)[indx] = data;
-`endif
-endcase
-`endif
-//$display("Writing bank %0d indx=%0d A=%h, D=%h",bank, indx, addr, data);
-endtask
-
-
-task slam_iccm_ram( input[31:0] addr, input[38:0] data);
-int bank, idx;
-
-bank = get_iccm_bank(addr, idx);
-`ifdef RV_ICCM_ENABLE
-case(bank) // {
-  0: `IRAM(0)[idx] = data;
-  1: `IRAM(1)[idx] = data;
- `ifdef RV_ICCM_NUM_BANKS_4
-  2: `IRAM(2)[idx] = data;
-  3: `IRAM(3)[idx] = data;
- `endif
- `ifdef RV_ICCM_NUM_BANKS_8
-  2: `IRAM(2)[idx] = data;
-  3: `IRAM(3)[idx] = data;
-  4: `IRAM(4)[idx] = data;
-  5: `IRAM(5)[idx] = data;
-  6: `IRAM(6)[idx] = data;
-  7: `IRAM(7)[idx] = data;
- `endif
-
- `ifdef RV_ICCM_NUM_BANKS_16
-  2: `IRAM(2)[idx] = data;
-  3: `IRAM(3)[idx] = data;
-  4: `IRAM(4)[idx] = data;
-  5: `IRAM(5)[idx] = data;
-  6: `IRAM(6)[idx] = data;
-  7: `IRAM(7)[idx] = data;
-  8: `IRAM(8)[idx] = data;
-  9: `IRAM(9)[idx] = data;
-  10: `IRAM(10)[idx] = data;
-  11: `IRAM(11)[idx] = data;
-  12: `IRAM(12)[idx] = data;
-  13: `IRAM(13)[idx] = data;
-  14: `IRAM(14)[idx] = data;
-  15: `IRAM(15)[idx] = data;
- `endif
-endcase // }
-`endif
-endtask
-
-task init_dccm;
-`ifdef RV_DCCM_ENABLE
-    `DRAM(0) = '{default:39'h0};
-    `DRAM(1) = '{default:39'h0};
-`ifdef RV_DCCM_NUM_BANKS_4
-    `DRAM(2) = '{default:39'h0};
-    `DRAM(3) = '{default:39'h0};
-`endif
-`ifdef RV_DCCM_NUM_BANKS_8
-    `DRAM(2) = '{default:39'h0};
-    `DRAM(3) = '{default:39'h0};
-    `DRAM(4) = '{default:39'h0};
-    `DRAM(5) = '{default:39'h0};
-    `DRAM(6) = '{default:39'h0};
-    `DRAM(7) = '{default:39'h0};
-`endif
-`endif
-endtask
-
-task init_iccm;
-`ifdef RV_ICCM_ENABLE
-    `IRAM(0) = '{default:39'h0};
-    `IRAM(1) = '{default:39'h0};
-`ifdef RV_ICCM_NUM_BANKS_4
-    `IRAM(2) = '{default:39'h0};
-    `IRAM(3) = '{default:39'h0};
-`endif
-`ifdef RV_ICCM_NUM_BANKS_8
-    `IRAM(4) = '{default:39'h0};
-    `IRAM(5) = '{default:39'h0};
-    `IRAM(6) = '{default:39'h0};
-    `IRAM(7) = '{default:39'h0};
-`endif
-
-`ifdef RV_ICCM_NUM_BANKS_16
-    `IRAM(4) = '{default:39'h0};
-    `IRAM(5) = '{default:39'h0};
-    `IRAM(6) = '{default:39'h0};
-    `IRAM(7) = '{default:39'h0};
-    `IRAM(8) = '{default:39'h0};
-    `IRAM(9) = '{default:39'h0};
-    `IRAM(10) = '{default:39'h0};
-    `IRAM(11) = '{default:39'h0};
-    `IRAM(12) = '{default:39'h0};
-    `IRAM(13) = '{default:39'h0};
-    `IRAM(14) = '{default:39'h0};
-    `IRAM(15) = '{default:39'h0};
- `endif
-`endif
-endtask
-
-
-function[6:0] riscv_ecc32(input[31:0] data);
-reg[6:0] synd;
-synd[0] = ^(data & 32'h56aa_ad5b);
-synd[1] = ^(data & 32'h9b33_366d);
-synd[2] = ^(data & 32'he3c3_c78e);
-synd[3] = ^(data & 32'h03fc_07f0);
-synd[4] = ^(data & 32'h03ff_f800);
-synd[5] = ^(data & 32'hfc00_0000);
-synd[6] = ^{data, synd[5:0]};
-return synd;
-endfunction
-
-function int get_dccm_bank(input[31:0] addr,  output int bank_idx);
-`ifdef RV_DCCM_NUM_BANKS_2
-    bank_idx = int'(addr[`RV_DCCM_BITS-1:3]);
-    return int'( addr[2]);
-`elsif RV_DCCM_NUM_BANKS_4
-    bank_idx = int'(addr[`RV_DCCM_BITS-1:4]);
-    return int'(addr[3:2]);
-`elsif RV_DCCM_NUM_BANKS_8
-    bank_idx = int'(addr[`RV_DCCM_BITS-1:5]);
-    return int'( addr[4:2]);
-`endif
-endfunction
-
-function int get_iccm_bank(input[31:0] addr,  output int bank_idx);
-`ifdef RV_DCCM_NUM_BANKS_2
-    bank_idx = int'(addr[`RV_DCCM_BITS-1:3]);
-    return int'( addr[2]);
-`elsif RV_ICCM_NUM_BANKS_4
-    bank_idx = int'(addr[`RV_ICCM_BITS-1:4]);
-    return int'(addr[3:2]);
-`elsif RV_ICCM_NUM_BANKS_8
-    bank_idx = int'(addr[`RV_ICCM_BITS-1:5]);
-    return int'( addr[4:2]);
-`elsif RV_ICCM_NUM_BANKS_16
-    bank_idx = int'(addr[`RV_ICCM_BITS-1:6]);
-    return int'( addr[5:2]);
-`endif
-endfunction
+`include "ccm_macros.svh"
 
 `ifdef RV_DCCM_WR_READBACK
 task write_dccm_word(input [31:0] addr, input [31:0] val);
@@ -5245,8 +4966,5 @@ jtagdpi #(
   assign jtag_trst_n = 1'b0;
 `endif
 
-/* verilator lint_off CASEINCOMPLETE */
-`include "dasm.svi"
-/* verilator lint_on CASEINCOMPLETE */
 
 endmodule
