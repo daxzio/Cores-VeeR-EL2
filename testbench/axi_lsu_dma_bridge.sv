@@ -80,17 +80,23 @@ output                  s1_bready
 );
 
 parameter ICCM_BASE = `RV_ICCM_BITS; // in LSBs
+parameter DCCM_BASE = `RV_DCCM_BITS; // in LSBs
+
 localparam IDFIFOSZ = $clog2(`RV_DMA_BUF_DEPTH);
+
 bit[31:0] iccm_real_base_addr = `RV_ICCM_SADR ;
+bit[31:0] dccm_real_base_addr = `RV_DCCM_SADR ;
 
 wire ar_slave_select;
 wire aw_slave_select;
 wire w_slave_select;
 
-wire rresp_select;
-wire bresp_select;
+reg  rresp_select;
+reg  bresp_select;
 wire ar_iccm_select;
 wire aw_iccm_select;
+wire ar_dccm_select;
+wire aw_dccm_select;
 
 reg [1:0] wsel_iptr, wsel_optr;
 reg [2:0] wsel_count;
@@ -106,11 +112,14 @@ reg [IDFIFOSZ-1:0] bid_cnt;
 
 
 // 1 select slave 1; 0 - slave 0
-assign ar_slave_select = ar_iccm_select;
-assign aw_slave_select = aw_iccm_select;
+assign ar_slave_select = ar_iccm_select | ar_dccm_select;
+assign aw_slave_select = aw_iccm_select | aw_dccm_select;
 
 assign ar_iccm_select = m_araddr[31:ICCM_BASE] == iccm_real_base_addr[31:ICCM_BASE];
 assign aw_iccm_select = m_awaddr[31:ICCM_BASE] == iccm_real_base_addr[31:ICCM_BASE];
+
+assign ar_dccm_select = m_araddr[31:DCCM_BASE] == dccm_real_base_addr[31:DCCM_BASE];
+assign aw_dccm_select = m_awaddr[31:DCCM_BASE] == dccm_real_base_addr[31:DCCM_BASE];
 
 assign s0_arvalid = m_arvalid & ~ar_slave_select;
 assign s1_arvalid = m_arvalid &  ar_slave_select;
@@ -127,7 +136,7 @@ assign s1_wvalid = m_wvalid &  w_slave_select;
 assign m_wready = w_slave_select ? s1_wready : s0_wready;
 assign w_slave_select = (wsel_count == 0 || wsel_count[2]) ? aw_slave_select : wsel[wsel_optr];
 
-assign m_rvalid = s0_rvalid | s1_rvalid;
+assign m_rvalid = rresp_select ? s1_rvalid : s0_rvalid;
 assign s0_rready = m_rready & ~rresp_select;
 assign s1_rready = m_rready &  rresp_select;
 assign m_rdata = rresp_select ? s1_rdata : s0_rdata;
@@ -135,16 +144,30 @@ assign m_rresp = rresp_select ? s1_rresp : s0_rresp;
 assign m_rid = rresp_select ? arid[rid_cnt] : s0_rid;
 assign m_rlast = rresp_select ? s1_rlast : s0_rlast;
 
-assign rresp_select = s1_rvalid & ~s0_rvalid;
+always @ (posedge clk or negedge reset_l)
+    if(!reset_l) begin
+        rresp_select <= '0;
+    end else begin
+        if (!m_rvalid | (m_rvalid & m_rready)) begin
+            rresp_select <= s1_rvalid & ~s0_rvalid;
+        end
+    end
 
-assign m_bvalid = s0_bvalid | s1_bvalid;
+assign m_bvalid = bresp_select ? s1_bvalid : s0_bvalid;
 assign s0_bready = m_bready & ~bresp_select;
 assign s1_bready = m_bready &  bresp_select;
 assign m_bid = bresp_select ? awid[bid_cnt] : s0_bid;
 assign m_bresp = bresp_select ? s1_bresp : s0_bresp;
 
 
-assign bresp_select = s1_bvalid & ~s0_bvalid;
+always @ (posedge clk or negedge reset_l)
+    if(!reset_l) begin
+        bresp_select <= '0;
+    end else begin
+        if (!m_bvalid | (m_bvalid & m_bready)) begin
+            bresp_select <= s1_bvalid & ~s0_bvalid;
+        end
+    end
 
 
 // W-channel select fifo
