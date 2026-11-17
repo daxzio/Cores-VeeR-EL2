@@ -405,6 +405,35 @@ def dec_pmp_ctl_verify(session, blockName, testName, coverage):
 
 
 @nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["tmr_recovery_fsm"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_passthrough",
+        "test_no_err",
+        "test_error",
+        "test_no_halt",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def tmr_recovery_fsm_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["tmr_boot_config"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_simple",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def tmr_boot_config_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
 @nox.parametrize("blockName", ["tmr_voter"])
 @nox.parametrize(
     "testName",
@@ -455,6 +484,58 @@ def tmr_dccm_verify(session, blockName, testName, coverage):
 )
 @nox.parametrize("coverage", coverageTypes)
 def tmr_ic_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["tmr_if/tmr_pic"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_faults",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def tmr_pic_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["tmr_if/tmr_dmi"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_faults",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def tmr_dmi_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["tmr_if/tmr_misc"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_faults",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def tmr_misc_verify(session, blockName, testName, coverage):
+    verify_block(session, blockName, testName, coverage)
+
+
+@nox.session(tags=["tests"])
+@nox.parametrize("blockName", ["tmr_if/tmr_exec"])
+@nox.parametrize(
+    "testName",
+    [
+        "test_faults",
+    ],
+)
+@nox.parametrize("coverage", coverageTypes)
+def tmr_exec_verify(session, blockName, testName, coverage):
     verify_block(session, blockName, testName, coverage)
 
 
