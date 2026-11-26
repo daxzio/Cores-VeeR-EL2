@@ -1,5 +1,7 @@
+load("@rules_hdl//autotuner:build_defs.bzl", "run_autotuner_tune")
 load("@rules_hdl//gds_write:build_defs.bzl", "gds_write")
 load("@rules_hdl//place_and_route:build_defs.bzl", "place_and_route", "custom_openroad_script")
+load("@rules_hdl//static_timing:build_defs.bzl", "run_opensta")
 load("@rules_hdl//synthesis:build_defs.bzl", "synthesize_rtl")
 load("@rules_hdl//synthesis:defs.bzl", "sdc_library")
 load("@rules_hdl//verilog:providers.bzl", "verilog_library")
@@ -9,6 +11,10 @@ load(
 )
 load("//design:defs.bzl", "veer_el2")
 exports_files(["bazel_patches/rules_hdl_asap7_visibility.patch"])
+package(
+    default_visibility = ["//visibility:public"],
+)
+
 
 # Collect ASAP7 v28 RVT behavioral cell models for gate-level simulation.
 # Use the same PDK module as the synthesis rule above.
@@ -111,6 +117,12 @@ CONFIGS = {
     synth_additional_args = "-booth", # run booth pass to rebuild multipliers before mapping
 ) for c in CONFIGS]
 
+[run_opensta(
+    name = "veer_el2_synth_sta_asap7_%s" % c,
+    synth_target = ":veer_el2_synth_asap7_%s" % c,
+    sdc = ":constraint_%s" % c,
+) for c in CONFIGS]
+
 [place_and_route(
     name = "veer_el2_place_and_route_asap7_%s" % c,
     clock_period = "4000", # in ps
@@ -139,3 +151,20 @@ CONFIGS = {
     name = "veer_el2_gds_asap7_%s" % c,
     implemented_rtl = ":veer_el2_place_and_route_asap7_%s" % c,
 ) for c in CONFIGS]
+
+[run_autotuner_tune(
+    name = "veer-el2_tune_%s" % c,
+    cells = "@org_theopenroadproject_asap7sc7p5t_28//:asap7-sc7p5t_rev28_rvt-ccs_tt",
+    config = "//:autotuner_%s.json" % c,
+    iterations = 1,
+    jobs = 2,
+    samples = 2,
+    sdc = "//:constraint_%s" % c,
+    stop_after_step = "global_routing",
+    synth_tcl = "//:synth.tcl",
+    top = "el2_veer_wrapper",
+    deps = [
+        "//:veer_el2_%s_verilog_lib" % c,
+    ],
+) for c in CONFIGS]
+
